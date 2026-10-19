@@ -33,11 +33,16 @@ static const Nota NOTAS_EXCESSO[] = {
   { 1046.50f, 0, 0.60f, 0.22f }, { 1318.51f, 130, 0.60f, 0.22f }, { 1046.50f, 260, 0.60f, 0.30f },
 };
 
+static const Nota NOTAS_VOLUME_TESTE[] = {
+  { 783.99f, 0, 0.70f, 0.25f },
+};
+
 struct Sequencia { const Nota *notas; int quantidade; };
 static const Sequencia SEQUENCIAS[NUM_SONS] = {
   { NOTAS_INICIO, sizeof(NOTAS_INICIO) / sizeof(Nota) },
   { NOTAS_RADAR, sizeof(NOTAS_RADAR) / sizeof(Nota) },
   { NOTAS_EXCESSO, sizeof(NOTAS_EXCESSO) / sizeof(Nota) },
+  { NOTAS_VOLUME_TESTE, sizeof(NOTAS_VOLUME_TESTE) / sizeof(Nota) },
 };
 
 // --- Tabela de seno (evita chamar sinf() milhares de vezes por segundo) ---

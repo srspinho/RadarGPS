@@ -15,6 +15,7 @@
 static I2SClass i2s;
 static QueueHandle_t filaSons;
 static const uint8_t PEDIDO_PARAR = 0xFF;
+static volatile uint8_t volumePorcento = SOM_VOLUME;
 
 static void tarefaAudio(void *) {
   static int16_t mono[256];
@@ -25,7 +26,7 @@ static void tarefaAudio(void *) {
       if (pedido == PEDIDO_PARAR) sintParar();
       else sintTocar((Som)pedido);
     }
-    sintGerar(mono, 256, SOM_VOLUME / 100.0f);
+    sintGerar(mono, 256, volumePorcento / 100.0f);
     for (int i = 0; i < 256; i++) estereo[2 * i] = estereo[2 * i + 1] = mono[i];
     i2s.write((uint8_t *)estereo, sizeof(estereo));  // bloqueia ate o DMA ter espaco
   }
@@ -57,6 +58,10 @@ void somParar() {
   if (filaSons) xQueueSend(filaSons, &pedido, 0);
 }
 
+void somVolume(uint8_t porcento) {
+  volumePorcento = porcento > 100 ? 100 : porcento;
+}
+
 void somAtualizar(uint32_t) {}
 
 #elif SOM_MODO == 1
@@ -84,6 +89,8 @@ void somParar() {
   digitalWrite(PINO_BUZZER, LOW);
 }
 
+void somVolume(uint8_t) {}  // buzzer ativo nao tem volume: so liga (>0) ou mudo (0)
+
 void somAtualizar(uint32_t agora) {
   if (desligarMs && agora >= desligarMs) {
     digitalWrite(PINO_BUZZER, LOW);
@@ -101,5 +108,6 @@ void somAtualizar(uint32_t agora) {
 void somIniciar() {}
 void somTocar(Som) {}
 void somParar() {}
+void somVolume(uint8_t) {}
 void somAtualizar(uint32_t) {}
 #endif

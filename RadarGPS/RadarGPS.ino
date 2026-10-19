@@ -13,6 +13,7 @@
 //  Placa: "ESP32S3 Dev Module" (pacote esp32 da Espressif) - veja o README.
 // =============================================================================
 #include <TinyGPSPlus.h>
+#include <Preferences.h>
 #include "config.h"
 #include "detector.h"
 #include "tela.h"
@@ -26,7 +27,12 @@ TinyGPSPlus gps;
 HardwareSerial SerialGPS(1);
 DetectorRadar detector;
 
-bool mudo = false;
+// Volume e brilho ficam gravados na flash (Preferences) e voltam ao religar
+Preferences preferencias;
+const uint8_t NIVEIS_VOLUME[] = { 20, 40, 60, 80, 100 };  // depois do 100 vem o mudo (0)
+uint8_t volume = SOM_VOLUME;
+uint32_t mostrarVolumeAteMs = 0;
+
 const uint8_t NIVEIS_BRILHO[] = { 255, 120, 40 };
 uint8_t nivelBrilho = 0;
 
@@ -34,7 +40,22 @@ uint8_t nivelBrilho = 0;
 //  Avisos sonoros (o som em si fica em som.cpp)
 // ---------------------------------------------------------------------------
 void avisar(Som som) {
-  if (!mudo) somTocar(som);
+  if (volume > 0) somTocar(som);
+}
+
+// Toque curto: 20 -> 40 -> 60 -> 80 -> 100 -> mudo -> 20 ...
+void proximoVolume(uint32_t agora) {
+  uint8_t novo = 0;
+  for (uint8_t nivel : NIVEIS_VOLUME) {
+    if (nivel > volume) { novo = nivel; break; }
+  }
+  volume = novo;
+
+  somVolume(volume);
+  if (volume == 0) somParar();
+  else somTocar(SOM_VOLUME_TESTE);  // "plim" para ouvir o volume novo
+  preferencias.putUChar("volume", volume);
+  mostrarVolumeAteMs = agora + 1500;
 }
 
 // Enquanto estiver acima do limite, repete o aviso de excesso
@@ -51,7 +72,7 @@ void atualizarSom(uint32_t agora, EstadoAlerta estado) {
 }
 
 // ---------------------------------------------------------------------------
-//  Touch / botao BOOT: toque curto = mudo, toque longo = brilho
+//  Touch / botao BOOT: toque curto = volume, toque longo = brilho
 // ---------------------------------------------------------------------------
 bool pressionadoAntes = false;
 bool longoTratado = false;
@@ -75,10 +96,10 @@ void tratarEntrada(uint32_t agora) {
   } else if (pressionado && !longoTratado && agora - inicioToqueMs >= 800) {
     nivelBrilho = (nivelBrilho + 1) % sizeof(NIVEIS_BRILHO);
     telaBrilho(NIVEIS_BRILHO[nivelBrilho]);
+    preferencias.putUChar("brilho", nivelBrilho);
     longoTratado = true;
   } else if (!pressionado && pressionadoAntes && !longoTratado && agora - inicioToqueMs >= 40) {
-    mudo = !mudo;
-    if (mudo) somParar();
+    proximoVolume(agora);
   }
   pressionadoAntes = pressionado;
 }
@@ -89,7 +110,15 @@ void setup() {
   SerialGPS.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   pinMode(PINO_BOTAO, INPUT_PULLUP);
+
+  preferencias.begin("radargps", false);
+  volume = preferencias.getUChar("volume", SOM_VOLUME);
+  if (volume > 100) volume = SOM_VOLUME;
+  nivelBrilho = preferencias.getUChar("brilho", 0);
+  if (nivelBrilho >= sizeof(NIVEIS_BRILHO)) nivelBrilho = 0;
+
   somIniciar();
+  somVolume(volume);
 
   if (!telaIniciar()) Serial.println("ERRO: falha ao iniciar a tela");
   telaMensagem("RadarGPS", "iniciando...");
@@ -146,7 +175,8 @@ void loop() {
       d.horaValida = gps.time.isValid() && gps.date.isValid() && gps.date.year() > 2000;
       d.hora = (gps.time.hour() + 24 + FUSO_HORARIO) % 24;
       d.minuto = gps.time.minute();
-      d.mudo = mudo;
+      d.volume = volume;
+      d.mostrarVolume = (int32_t)(mostrarVolumeAteMs - agora) > 0;
       d.alvo = &semAlvo;
       telaDesenhar(d);
     }

@@ -12,6 +12,7 @@ enum Som : uint8_t {
   SOM_INICIO = 0,   // ligou o aparelho: duas notas subindo
   SOM_RADAR,        // radar a frente: "ding-dong-dong" descendente (estilo aeroporto)
   SOM_EXCESSO,      // acima do limite: tres notas agudas e rapidas (repetido)
+  SOM_VOLUME_TESTE, // "plim" curto ao mudar o volume pelo toque
   NUM_SONS
 };
 

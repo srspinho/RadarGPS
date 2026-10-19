@@ -169,8 +169,14 @@ edite as tabelas `NOTAS_*` em `sintetizador.cpp`.
 
 | Ação | Toque na tela ou botão BOOT |
 |------|-----------------------------|
-| Toque curto | liga/desliga o **mudo** |
+| Toque curto | muda o **volume**: 20 → 40 → 60 → 80 → 100 → **MUDO** → 20… |
 | Toque longo (0,8 s) | alterna o **brilho** (100% / 50% / 15%) |
+
+A cada toque curto, um painel mostra o volume por 1,5 s e toca um "plim" no volume
+novo. Na barra de status, um ícone de 5 barrinhas mostra o volume atual (ou "MUDO").
+O volume e o brilho ficam gravados na memória e voltam assim ao religar. O
+`SOM_VOLUME` do `config.h` só vale na primeira vez. Com buzzer ativo (`SOM_MODO 1`) não
+existe volume: qualquer nível acima de zero toca igual.
 
 ## Atualizando a base de radares
 

@@ -120,6 +120,38 @@ static void desenharPlaca(int cx, int cy, uint8_t limite) {
   gfx->print(txt);
 }
 
+// Icone de volume: 5 barras crescentes, acesas conforme o volume (20% cada)
+static void desenharBarrasVolume(int x, int yBase, int largura, int espaco, int alturaMax,
+                                 uint8_t volume, uint16_t cor) {
+  int acesas = (volume + 10) / 20;
+  for (int i = 0; i < 5; i++) {
+    int h = alturaMax * (i + 1) / 5;
+    int bx = x + i * (largura + espaco);
+    if (i < acesas) gfx->fillRect(bx, yBase - h, largura, h, cor);
+    else gfx->drawRect(bx, yBase - h, largura, h, COR_CINZA);
+  }
+}
+
+// Painel grande que aparece por alguns instantes quando o volume muda
+static void desenharPainelVolume(uint8_t volume) {
+  const int x = 60, y = 36, w = 200, h = 104;
+  gfx->fillRoundRect(x, y, w, h, 10, COR_FUNDO);
+  gfx->drawRoundRect(x, y, w, h, 10, COR_TEXTO);
+  gfx->drawRoundRect(x + 1, y + 1, w - 2, h - 2, 9, COR_TEXTO);
+  textoCentro("VOLUME", LARG / 2, y + 10, 2, COR_CINZA);
+  if (volume == 0) {
+    textoCentro("MUDO", LARG / 2, y + 48, 4, COR_VERMELHO);
+  } else {
+    desenharBarrasVolume(x + 14, y + h - 14, 14, 6, 56, volume, COR_VERDE);
+    char txt[8];
+    snprintf(txt, sizeof(txt), "%u%%", volume);
+    gfx->setTextSize(3);
+    gfx->setTextColor(COR_TEXTO);
+    gfx->setCursor(x + 118, y + 54);
+    gfx->print(txt);
+  }
+}
+
 void telaDesenhar(const DadosTela &d) {
   const InfoAlvo *a = d.alvo;
   bool temAlvo = a && a->estado != ALERTA_NENHUM;
@@ -145,7 +177,8 @@ void telaDesenhar(const DadosTela &d) {
   gfx->setCursor(8, 8);
   snprintf(txt, sizeof(txt), "%dsat", d.satelites);
   gfx->print(txt);
-  if (d.mudo) textoCentro("MUDO", LARG / 2, 8, 2, fundoVermelho ? COR_TEXTO : COR_VERMELHO);
+  if (d.volume == 0) textoCentro("MUDO", LARG / 2, 8, 2, fundoVermelho ? COR_TEXTO : COR_VERMELHO);
+  else desenharBarrasVolume(LARG / 2 - 21, 22, 6, 3, 16, d.volume, COR_TEXTO);
   if (d.horaValida) {
     snprintf(txt, sizeof(txt), "%02d:%02d", d.hora, d.minuto);
     gfx->setTextColor(COR_TEXTO);
@@ -194,6 +227,8 @@ void telaDesenhar(const DadosTela &d) {
     gfx->drawRect(10, 162, LARG - 20, 8, COR_CINZA);
     gfx->fillRect(12, 164, (int)((LARG - 24) * frac), 4, fundoVermelho ? COR_TEXTO : corInfo);
   }
+
+  if (d.mostrarVolume) desenharPainelVolume(d.volume);
 
   enviarTela();
 }

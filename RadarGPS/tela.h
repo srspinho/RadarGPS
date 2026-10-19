@@ -9,7 +9,8 @@ struct DadosTela {
   float velKmh;
   bool horaValida;
   int hora, minuto;
-  bool mudo;
+  uint8_t volume;        // 0 (mudo) a 100
+  bool mostrarVolume;    // true logo apos mudar o volume: mostra o painel grande
   const InfoAlvo *alvo;
 };
 

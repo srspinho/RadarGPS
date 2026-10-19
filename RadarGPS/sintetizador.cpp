@@ -2,14 +2,18 @@
 #include <math.h>
 #include <string.h>
 
-// Cada nota e um "sino": a frequencia fundamental mais 3 harmonicos, cada um
-// com um decaimento exponencial proprio (os agudos somem antes, como num
-// vibrafone). Um ataque de alguns milissegundos evita estalos.
-static const int NUM_PARCIAIS = 4;
-static const float RAZAO_PARCIAL[NUM_PARCIAIS] = { 1.0f, 2.0f, 3.0f, 4.2f };
-static const float AMP_PARCIAL[NUM_PARCIAIS]   = { 1.0f, 0.35f, 0.12f, 0.06f };
-static const float TEMPO_PARCIAL[NUM_PARCIAIS] = { 1.0f, 0.5f, 0.3f, 0.2f };  // x decaimento da nota
-static const int AMOSTRAS_ATAQUE = SINT_TAXA_AMOSTRAGEM * 4 / 1000;           // 4 ms
+// Cada nota e um "sino": a frequencia fundamental mais 2 harmonicos fracos, cada
+// um com um decaimento exponencial proprio (os agudos somem antes, como num
+// vibrafone). So harmonicos inteiros: soa mais limpo em alto-falante pequeno.
+// Um ataque de alguns milissegundos evita estalos.
+static const int NUM_PARCIAIS = 3;
+static const float RAZAO_PARCIAL[NUM_PARCIAIS] = { 1.0f, 2.0f, 3.0f };
+static const float AMP_PARCIAL[NUM_PARCIAIS]   = { 1.0f, 0.20f, 0.05f };
+static const float TEMPO_PARCIAL[NUM_PARCIAIS] = { 1.0f, 0.45f, 0.25f };      // x decaimento da nota
+static const int AMOSTRAS_ATAQUE = SINT_TAXA_AMOSTRAGEM * 8 / 1000;           // 8 ms
+
+// Filtro passa-baixas (~3 kHz) que tira a aspereza dos agudos
+static const float COEF_FILTRO = 0.575f;   // 1 - exp(-2*pi*3000/22050)
 
 struct Nota {
   float freqHz;
@@ -26,7 +30,7 @@ static const Nota NOTAS_RADAR[] = {
   { 783.99f, 0, 0.80f, 0.90f }, { 659.25f, 300, 0.80f, 0.90f }, { 523.25f, 600, 0.85f, 1.20f },
 };
 static const Nota NOTAS_EXCESSO[] = {
-  { 1046.50f, 0, 0.70f, 0.22f }, { 1318.51f, 130, 0.70f, 0.22f }, { 1046.50f, 260, 0.70f, 0.30f },
+  { 1046.50f, 0, 0.60f, 0.22f }, { 1318.51f, 130, 0.60f, 0.22f }, { 1046.50f, 260, 0.60f, 0.30f },
 };
 
 struct Sequencia { const Nota *notas; int quantidade; };
@@ -59,6 +63,7 @@ struct Voz {
 };
 static const int MAX_VOZES = 8;
 static Voz vozes[MAX_VOZES];
+static float saidaFiltro = 0;
 
 static void iniciarNota(const Nota &n) {
   // Usa uma voz livre; se nao houver, reaproveita a mais antiga
@@ -88,6 +93,15 @@ void sintTocar(Som som) {
 
 void sintParar() {
   for (int i = 0; i < MAX_VOZES; i++) vozes[i].ativa = false;
+  saidaFiltro = 0;
+}
+
+// Limitador suave: abaixo de ~0,5 nao altera nada; acima disso arredonda os
+// picos (em vez de cortar seco), e nunca passa de 1,0
+static float limitar(float x) {
+  if (x > 3.0f) return 1.0f;
+  if (x < -3.0f) return -1.0f;
+  return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
 }
 
 bool sintTocando() {
@@ -98,7 +112,7 @@ bool sintTocando() {
 
 void sintGerar(int16_t *saida, int n, float volume) {
   if (!tabelaPronta) prepararTabela();
-  const float ganho = 32767.0f * 0.30f * volume;  // folga para varias notas somadas
+  const float nivel = 0.35f * volume;  // folga para varias notas somadas
   for (int i = 0; i < n; i++) {
     float soma = 0;
     for (int k = 0; k < MAX_VOZES; k++) {
@@ -117,9 +131,7 @@ void sintGerar(int16_t *saida, int n, float volume) {
       v.idade++;
       if (v.envelope[0] < 0.0005f) v.ativa = false;  // ja inaudivel
     }
-    float s = soma * ganho;
-    if (s > 32767.0f) s = 32767.0f;
-    if (s < -32768.0f) s = -32768.0f;
-    saida[i] = (int16_t)s;
+    saidaFiltro += COEF_FILTRO * (soma * nivel - saidaFiltro);
+    saida[i] = (int16_t)(limitar(saidaFiltro) * 32000.0f);
   }
 }

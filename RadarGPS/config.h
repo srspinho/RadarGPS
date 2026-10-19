@@ -77,7 +77,7 @@
 #define I2S_BCLK 4
 #define I2S_LRC  5
 #define I2S_DIN  6
-#define SOM_VOLUME 70        // 0 a 100
+#define SOM_VOLUME 40        // 0 a 100 (som distorcido? baixe aqui e veja o README)
 
 #define PINO_BUZZER 7        // so usado com SOM_MODO 1
 

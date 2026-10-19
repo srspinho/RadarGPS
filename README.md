@@ -62,10 +62,33 @@ pinagem oficial da Waveshare.
 | SD, GAIN | deixe desligados |
 
 O alto-falante vai nos bornes + e − do módulo. O volume se ajusta em `SOM_VOLUME`
-(0 a 100). Se o som sair alto demais, ligue o pino GAIN do módulo ao VIN, o que
-reduz o ganho para 6 dB.
+(0 a 100, padrão 40).
 
-### Testando o som sem o amplificador (`SOM_MODO 3`)
+#### Som distorcido ("estourado")?
+
+O software não satura em nenhum volume: o limitador arredonda os picos. Se o som
+estourar, o problema é o amplificador entregando mais potência do que o alto-falante
+ou a fonte aguentam. Em ordem de facilidade:
+
+1. **Baixe o `SOM_VOLUME`**, por exemplo para 25.
+2. **Reduza o ganho do MAX98357A pelo pino GAIN.** Solto, ele amplifica 9 dB.
+
+   | Pino GAIN | Ganho |
+   |-----------|-------|
+   | resistor de 100 kΩ até o VIN | **3 dB** (o mais baixo) |
+   | direto no VIN | 6 dB |
+   | solto (padrão) | 9 dB |
+   | direto no GND | 12 dB |
+   | resistor de 100 kΩ até o GND | 15 dB |
+
+3. **Alimente o módulo pelo VBUS (5 V)**, não pelo 3V3. Nos picos ele puxa centenas
+   de mA, o regulador de 3,3 V da placa não segura e o som distorce. Um capacitor
+   eletrolítico de 100 a 470 µF entre VIN e GND, perto do módulo, ajuda bastante.
+4. **Use um alto-falante de 4–8 Ω e pelo menos 2 W.** Alto-falantes de 0,5 W
+   (os de brinquedo) distorcem com qualquer volume razoável.
+5. **Fios curtos** entre o ESP32 e o módulo nos sinais BCLK, LRC e DIN.
+
+## Testando o som sem o amplificador (`SOM_MODO 3`)
 
 Nesse modo o ESP32-S3 gera o áudio em PDM (modulação de 1 bit) num único pino, o
 GPIO6. Ele toca os mesmos chimes, com volume baixo:

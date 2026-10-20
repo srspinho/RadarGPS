@@ -16,6 +16,12 @@
 //    +  volume +10             -  volume -10
 //    s  silencio               ?  menu e configuracao atual
 //
+//    t  TESTE DE FIACAO: 3 s de onda quadrada de 440 Hz "na unha" (digitalWrite),
+//       sem I2S nem PWM. Deve soar ALTO no amplificador. Se nao soar, o problema
+//       e a ligacao (pino errado, falta de GND comum, entrada do amplificador).
+//    d  liga/desliga o diagnostico: mostra a cada segundo quantas amostras o I2S
+//       consumiu (o esperado e ~22050/s; 0 = o audio parou de sair)
+//
 //  Usa o mesmo sintetizador.cpp do RadarGPS (copiado aqui). Se mudar as notas
 //  la, copie o arquivo de novo para ca.
 // =============================================================================
@@ -43,6 +49,8 @@ static Sinal sinal = SINAL_SILENCIO;
 static float freqHz = 440;
 static uint8_t volume = 40;
 static bool erroEscritaAvisado = false;
+static bool diagnostico = false;
+static uint32_t amostrasEnviadas = 0;
 
 static void configurarModo(Modo novo) {
   Serial.printf("Trocando para: %s ...\n", NOME_MODO[novo]);
@@ -113,6 +121,30 @@ static void mostrarMenu() {
   Serial.println("Saida: a=I2S  b=PDM  c=PWM  m=proximo modo");
   Serial.println("Sinal: 1=440Hz 2=1kHz 3=250Hz 4=varredura 5=quadrada 440Hz");
   Serial.println("Chime: i=inicio r=radar e=excesso | +/- volume | s=silencio | ?=menu");
+  Serial.println("Testes: t=fiacao (onda quadrada direta no pino)  d=diagnostico do I2S");
+}
+
+// Onda quadrada gerada direto no pino, sem nenhum periferico de audio
+static void testeFiacao() {
+  Serial.printf("Teste de fiacao: 440 Hz no GPIO%d por 3 s (deve soar ALTO)...\n", PINO_DIN);
+  if (i2s) {
+    i2s->end();
+    delete i2s;
+    i2s = nullptr;
+  }
+  if (modo == MODO_PWM) ledcDetach(PINO_DIN);
+  pinMode(PINO_DIN, OUTPUT);
+  uint32_t fim = millis() + 3000;
+  while ((int32_t)(fim - millis()) > 0) {
+    digitalWrite(PINO_DIN, HIGH);
+    delayMicroseconds(1136);
+    digitalWrite(PINO_DIN, LOW);
+    delayMicroseconds(1136);
+  }
+  Serial.println("Fim do teste de fiacao. Voltando ao modo anterior.");
+  Modo anterior = modo;
+  modo = NUM_MODOS;
+  configurarModo(anterior);
 }
 
 static void tocarChime(Som som, const char *nome) {
@@ -141,6 +173,11 @@ static void tratarTecla(char c) {
     case '-': volume = volume <= 10 ? 0 : volume - 10;   Serial.printf("Volume %u%%\n", volume); break;
     case 's': case 'S': sinal = SINAL_SILENCIO; sintParar(); Serial.println("Silencio"); break;
     case '?': mostrarMenu(); break;
+    case 't': case 'T': testeFiacao(); break;
+    case 'd': case 'D':
+      diagnostico = !diagnostico;
+      Serial.printf("Diagnostico %s\n", diagnostico ? "LIGADO" : "desligado");
+      break;
     default: Serial.println("(tecla sem funcao - digite ? para o menu)"); break;
   }
   if (modo == MODO_PWM && (sinal == SINAL_VARREDURA || sinal == SINAL_CHIME))
@@ -157,6 +194,15 @@ void setup() {
 
 void loop() {
   while (Serial.available()) tratarTecla((char)Serial.read());
+
+  static uint32_t ultimoRelatorio = 0;
+  if (diagnostico && millis() - ultimoRelatorio >= 1000) {
+    ultimoRelatorio = millis();
+    Serial.printf("[diag] modo=%s sinal=%d volume=%u%% amostras/s=%lu\n",
+                  modo < NUM_MODOS ? NOME_MODO[modo] : "-", (int)sinal, volume,
+                  (unsigned long)amostrasEnviadas);
+    amostrasEnviadas = 0;
+  }
 
   if (modo == MODO_PWM) {
     // PWM: so liga/desliga um tom (sem volume)
@@ -175,6 +221,7 @@ void loop() {
   gerarBloco(mono, 256);
   for (int i = 0; i < 256; i++) estereo[2 * i] = estereo[2 * i + 1] = mono[i];
   size_t escritos = i2s ? i2s->write((uint8_t *)estereo, sizeof(estereo)) : 0;
+  amostrasEnviadas += escritos / 4;  // 4 bytes por amostra estereo de 16 bits
   if (escritos == 0) {
     if (!erroEscritaAvisado) {
       Serial.println("ERRO: o I2S nao esta aceitando dados (veja a mensagem de inicio do modo)");

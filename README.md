@@ -118,6 +118,8 @@ aparece confirmada como `> tecla 'x'`.
 | `i` `r` `e` | chimes de início, radar e excesso |
 | `+` `-` | volume |
 | `s` / `?` | silêncio / menu |
+| `t` | **teste de fiação**: 3 s de onda quadrada de 440 Hz direto no pino, sem I2S nem PWM |
+| `d` | diagnóstico: mostra a cada segundo quantas amostras o I2S enviou (esperado ~22050/s) |
 
 Começa em **PDM no GPIO11**. Os pinos e o modo inicial ficam no topo do `.ino`
 (`PINO_BCLK`, `PINO_LRC`, `PINO_DIN`, `MODO_INICIAL`).

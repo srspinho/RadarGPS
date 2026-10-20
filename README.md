@@ -101,6 +101,23 @@ GPIO6. Ele toca os mesmos chimes, com volume baixo:
 Nunca ligue um alto-falante direto no pino: ele pede corrente demais e pode queimar o
 GPIO. Depois do teste, volte para `SOM_MODO 2` e use o MAX98357A.
 
+### Bancada de testes do áudio (`testes/TesteAudio`)
+
+Programa separado, sem GPS e sem tela, para testar só o som. Abra
+`testes/TesteAudio/TesteAudio.ino`, grave e use o Monitor Serial (115200):
+
+| Tecla | Ação |
+|-------|------|
+| `m` | troca a saída: **I2S** (MAX98357A) → **PDM** (1 pino) → **PWM** (onda quadrada) |
+| `1` `2` `3` | seno de 440 Hz, 1 kHz e 250 Hz |
+| `4` | varredura de 150 Hz a 5 kHz (mostra em que faixa o alto-falante "grita") |
+| `5` | onda quadrada de 440 Hz (para comparar com o seno) |
+| `i` `r` `e` | chimes de início, radar e excesso |
+| `+` `-` | volume |
+| `s` / `?` | silêncio / menu |
+
+Os pinos ficam no topo do `.ino` (`PINO_BCLK`, `PINO_LRC`, `PINO_DIN`).
+
 ## Preparando a Arduino IDE
 
 1. **Arquivo → Preferências → URLs adicionais**:

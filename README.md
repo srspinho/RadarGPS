@@ -104,19 +104,40 @@ GPIO. Depois do teste, volte para `SOM_MODO 2` e use o MAX98357A.
 ### Bancada de testes do áudio (`testes/TesteAudio`)
 
 Programa separado, sem GPS e sem tela, para testar só o som. Abra
-`testes/TesteAudio/TesteAudio.ino`, grave e use o Monitor Serial (115200):
+`testes/TesteAudio/TesteAudio.ino`, grave e use o Monitor Serial a 115200, com
+**USB CDC On Boot: Enabled**. Digite a tecla e aperte Enter; cada tecla recebida
+aparece confirmada como `> tecla 'x'`.
 
 | Tecla | Ação |
 |-------|------|
-| `m` | troca a saída: **I2S** (MAX98357A) → **PDM** (1 pino) → **PWM** (onda quadrada) |
+| `a` / `b` / `c` | saída **I2S** (MAX98357A) / **PDM** (1 pino, para filtro RC + PAM8403) / **PWM** |
+| `m` | passa para o próximo modo |
 | `1` `2` `3` | seno de 440 Hz, 1 kHz e 250 Hz |
-| `4` | varredura de 150 Hz a 5 kHz (mostra em que faixa o alto-falante "grita") |
+| `4` | varredura de 150 Hz a 5 kHz |
 | `5` | onda quadrada de 440 Hz (para comparar com o seno) |
 | `i` `r` `e` | chimes de início, radar e excesso |
 | `+` `-` | volume |
 | `s` / `?` | silêncio / menu |
 
-Os pinos ficam no topo do `.ino` (`PINO_BCLK`, `PINO_LRC`, `PINO_DIN`).
+Começa em **PDM no GPIO11**. Os pinos e o modo inicial ficam no topo do `.ino`
+(`PINO_BCLK`, `PINO_LRC`, `PINO_DIN`, `MODO_INICIAL`).
+
+#### PAM8403 (ou outro amplificador analógico) pelo PDM
+
+O pino sai com 3,3 V, mas o PAM8403 espera algumas centenas de mV e já amplifica
+~24 dB. Ligado direto, ou só com um RC simples, ele satura e o som fica estridente.
+Use um filtro de dois estágios que também atenua o sinal:
+
+```
+GPIO ──[1kΩ]──┬──[10kΩ]──┬──[1µF]──► PAM8403 IN
+              │          │
+             10nF     1kΩ ∥ 10nF
+              │          │
+GND ──────────┴──────────┴─────────► PAM8403 GND
+```
+
+Alimente o PAM8403 pelo 5 V, com um eletrolítico de 220–470 µF perto dele, e use o
+mesmo GND do ESP32.
 
 ## Preparando a Arduino IDE
 

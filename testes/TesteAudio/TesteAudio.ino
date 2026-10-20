@@ -1,58 +1,79 @@
 // =============================================================================
 //  TesteAudio - bancada de testes do audio do RadarGPS (sem GPS, sem tela)
 //
-//  Controle pelo Monitor Serial (115200, "Nova linha" ou "Nenhum final de linha"):
+//  Monitor Serial a 115200. Na IDE: Ferramentas -> "USB CDC On Boot: Enabled".
+//  Digite a tecla e aperte Enter. Cada tecla recebida e confirmada na tela.
 //
-//    m  troca o modo de saida:  I2S (MAX98357A) -> PDM (1 pino) -> PWM (onda quadrada)
+//    a  saida I2S padrao (MAX98357A: BCLK, LRC, DIN)
+//    b  saida PDM 1 bit no PINO_DIN (filtro RC -> amplificador analogico, ex. PAM8403)
+//    c  saida PWM (onda quadrada simples no PINO_DIN, so para tons)
+//    m  passa para o proximo modo (a -> b -> c -> a)
+//
 //    1  seno 440 Hz            2  seno 1000 Hz          3  seno 250 Hz
 //    4  varredura 150 Hz -> 5 kHz (ache a frequencia em que o som "grita")
-//    5  onda quadrada 440 Hz (compare com o seno: e assim que soa um som "estridente")
+//    5  onda quadrada 440 Hz (compare com o seno: assim soa um som "estridente")
 //    i  chime de inicio        r  chime de radar        e  chime de excesso
 //    +  volume +10             -  volume -10
-//    s  silencio               ?  mostra este menu e a configuracao atual
+//    s  silencio               ?  menu e configuracao atual
 //
-//  Use o mesmo sintetizador.cpp do RadarGPS (copiado aqui). Se mudar as notas
+//  Usa o mesmo sintetizador.cpp do RadarGPS (copiado aqui). Se mudar as notas
 //  la, copie o arquivo de novo para ca.
 // =============================================================================
 #include <ESP_I2S.h>
 #include "sintetizador.h"
 
-// --- Pinos (os mesmos do config.h do RadarGPS) ---
+// --- Pinos ---
 #define PINO_BCLK 4    // I2S: BCLK do MAX98357A   | PDM: sai o clock (nao precisa ligar)
-#define PINO_LRC  5    // I2S: LRC do MAX98357A    | PDM: nao usado
-#define PINO_DIN  6    // I2S: DIN do MAX98357A    | PDM e PWM: saida de audio
+#define PINO_LRC  5    // I2S: LRC do MAX98357A    | PDM e PWM: nao usado
+#define PINO_DIN  11   // I2S: DIN do MAX98357A    | PDM e PWM: saida de audio
 
 enum Modo : uint8_t { MODO_I2S, MODO_PDM, MODO_PWM, NUM_MODOS };
+#define MODO_INICIAL MODO_PDM
+
 static const char *NOME_MODO[] = { "I2S padrao (MAX98357A)", "PDM 1 bit no PINO_DIN",
                                    "PWM onda quadrada no PINO_DIN (so tons)" };
 
 enum Sinal : uint8_t { SINAL_SILENCIO, SINAL_SENO, SINAL_QUADRADA, SINAL_VARREDURA, SINAL_CHIME };
 
-static I2SClass i2s;
-static volatile Modo modoPedido = MODO_I2S;
-static volatile Sinal sinal = SINAL_SILENCIO;
-static volatile float freqHz = 440;
-static volatile uint8_t volume = 40;
-static volatile int somPedido = -1;   // chime a tocar (-1 = nenhum)
-static Modo modoAtivo = NUM_MODOS;    // nenhum ainda
+// Tudo roda no loop() (sem tarefas paralelas): mais simples de acompanhar.
+// Um bloco de 256 amostras dura ~12 ms, entao o teclado continua responsivo.
+static I2SClass *i2s = nullptr;
+static Modo modo = NUM_MODOS;
+static Sinal sinal = SINAL_SILENCIO;
+static float freqHz = 440;
+static uint8_t volume = 40;
+static bool erroEscritaAvisado = false;
 
-static void configurarModo(Modo m) {
-  if (modoAtivo == MODO_I2S || modoAtivo == MODO_PDM) i2s.end();
-  if (modoAtivo == MODO_PWM) ledcDetach(PINO_DIN);
-  modoAtivo = m;
+static void configurarModo(Modo novo) {
+  Serial.printf("Trocando para: %s ...\n", NOME_MODO[novo]);
 
-  bool ok = true;
-  if (m == MODO_I2S) {
-    i2s.setPins(PINO_BCLK, PINO_LRC, PINO_DIN);
-    ok = i2s.begin(I2S_MODE_STD, SINT_TAXA_AMOSTRAGEM, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-  } else if (m == MODO_PDM) {
-    i2s.setPinsPdmTx(PINO_BCLK, PINO_DIN);
-    ok = i2s.begin(I2S_MODE_PDM_TX, SINT_TAXA_AMOSTRAGEM, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
-  } else {
+  // Libera o modo anterior. O objeto I2S e recriado do zero a cada troca.
+  if (i2s) {
+    i2s->end();
+    delete i2s;
+    i2s = nullptr;
+  }
+  if (modo == MODO_PWM) ledcDetach(PINO_DIN);
+
+  bool ok;
+  if (novo == MODO_PWM) {
     ok = ledcAttach(PINO_DIN, 1000, 10);
     ledcWriteTone(PINO_DIN, 0);
+  } else {
+    i2s = new I2SClass();
+    if (novo == MODO_I2S) {
+      i2s->setPins(PINO_BCLK, PINO_LRC, PINO_DIN);
+      ok = i2s->begin(I2S_MODE_STD, SINT_TAXA_AMOSTRAGEM, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    } else {
+      i2s->setPinsPdmTx(PINO_BCLK, PINO_DIN);
+      ok = i2s->begin(I2S_MODE_PDM_TX, SINT_TAXA_AMOSTRAGEM, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    }
   }
-  Serial.printf("Modo: %s %s\n", NOME_MODO[m], ok ? "" : "-> FALHOU ao iniciar!");
+  modo = novo;
+  sinal = SINAL_SILENCIO;
+  sintParar();
+  erroEscritaAvisado = false;
+  Serial.printf("Modo ativo: %s -> %s\n", NOME_MODO[modo], ok ? "OK" : "FALHOU ao iniciar!");
 }
 
 // Gera um bloco de audio conforme o sinal escolhido
@@ -61,25 +82,19 @@ static void gerarBloco(int16_t *mono, int n) {
   static float freqVarredura = 150;
   const float amp = 0.5f * volume / 100.0f * 32767.0f;
 
-  if (somPedido >= 0) {
-    sintTocar((Som)somPedido);
-    somPedido = -1;
+  if (sinal == SINAL_CHIME) {
+    sintGerar(mono, n, volume / 100.0f);
+    if (!sintTocando()) sinal = SINAL_SILENCIO;
+    return;
   }
-  switch (sinal) {
-    case SINAL_CHIME:
-      sintGerar(mono, n, volume / 100.0f);
-      if (!sintTocando()) sinal = SINAL_SILENCIO;
-      return;
-    case SINAL_SILENCIO:
-      for (int i = 0; i < n; i++) mono[i] = 0;
-      return;
-    default:
-      break;
+  if (sinal == SINAL_SILENCIO) {
+    for (int i = 0; i < n; i++) mono[i] = 0;
+    return;
   }
   for (int i = 0; i < n; i++) {
     float f = freqHz;
     if (sinal == SINAL_VARREDURA) {
-      freqVarredura *= 1.0000163f;  // ~5 s de 150 Hz a 5 kHz
+      freqVarredura *= 1.0000315f;  // ~5 s de 150 Hz a 5 kHz
       if (freqVarredura > 5000) freqVarredura = 150;
       f = freqVarredura;
     }
@@ -90,57 +105,81 @@ static void gerarBloco(int16_t *mono, int n) {
   }
 }
 
-static void tarefaAudio(void *) {
-  static int16_t mono[256];
-  static int16_t estereo[512];
-  for (;;) {
-    if (modoPedido != modoAtivo) configurarModo(modoPedido);
-    if (modoAtivo == MODO_PWM) {  // PWM: so liga/desliga um tom (sem volume)
-      static float ultimo = -1;
-      float f = (sinal == SINAL_SENO || sinal == SINAL_QUADRADA) ? freqHz : 0;
-      if (f != ultimo) { ledcWriteTone(PINO_DIN, (uint32_t)f); ultimo = f; }
-      vTaskDelay(pdMS_TO_TICKS(20));
-      continue;
-    }
-    gerarBloco(mono, 256);
-    for (int i = 0; i < 256; i++) estereo[2 * i] = estereo[2 * i + 1] = mono[i];
-    i2s.write((uint8_t *)estereo, sizeof(estereo));
-  }
-}
-
 static void mostrarMenu() {
   Serial.println();
   Serial.println("=== TesteAudio ===");
-  Serial.printf("Modo: %s | volume %u%% | pinos BCLK=%d LRC=%d DIN=%d\n", NOME_MODO[modoPedido], volume,
-                PINO_BCLK, PINO_LRC, PINO_DIN);
-  Serial.println("m=modo  1=440Hz 2=1kHz 3=250Hz 4=varredura 5=quadrada 440Hz");
-  Serial.println("i/r/e=chimes inicio/radar/excesso  +/-=volume  s=silencio  ?=menu");
+  Serial.printf("Modo: %s | volume %u%% | pinos BCLK=%d LRC=%d DIN=%d\n",
+                modo < NUM_MODOS ? NOME_MODO[modo] : "-", volume, PINO_BCLK, PINO_LRC, PINO_DIN);
+  Serial.println("Saida: a=I2S  b=PDM  c=PWM  m=proximo modo");
+  Serial.println("Sinal: 1=440Hz 2=1kHz 3=250Hz 4=varredura 5=quadrada 440Hz");
+  Serial.println("Chime: i=inicio r=radar e=excesso | +/- volume | s=silencio | ?=menu");
 }
 
-void setup() {
-  Serial.begin(115200);
-  delay(1500);  // tempo para abrir o Monitor Serial
-  xTaskCreatePinnedToCore(tarefaAudio, "audio", 4096, nullptr, 5, nullptr, 0);
-  mostrarMenu();
+static void tocarChime(Som som, const char *nome) {
+  sintTocar(som);
+  sinal = SINAL_CHIME;
+  Serial.printf("Chime %s\n", nome);
 }
 
-void loop() {
-  if (!Serial.available()) { delay(10); return; }
-  char c = Serial.read();
+static void tratarTecla(char c) {
+  if (c == '\r' || c == '\n' || c == ' ') return;
+  Serial.printf("> tecla '%c'\n", c);
   switch (c) {
-    case 'm': modoPedido = (Modo)((modoPedido + 1) % NUM_MODOS); sinal = SINAL_SILENCIO; break;
+    case 'a': case 'A': configurarModo(MODO_I2S); break;
+    case 'b': case 'B': configurarModo(MODO_PDM); break;
+    case 'c': case 'C': configurarModo(MODO_PWM); break;
+    case 'm': case 'M': configurarModo((Modo)((modo + 1) % NUM_MODOS)); break;
     case '1': freqHz = 440;  sinal = SINAL_SENO; Serial.println("Seno 440 Hz"); break;
     case '2': freqHz = 1000; sinal = SINAL_SENO; Serial.println("Seno 1000 Hz"); break;
     case '3': freqHz = 250;  sinal = SINAL_SENO; Serial.println("Seno 250 Hz"); break;
     case '4': sinal = SINAL_VARREDURA; Serial.println("Varredura 150 Hz -> 5 kHz"); break;
-    case '5': freqHz = 440; sinal = SINAL_QUADRADA; Serial.println("Quadrada 440 Hz"); break;
-    case 'i': somPedido = SOM_INICIO;  sinal = SINAL_CHIME; Serial.println("Chime inicio"); break;
-    case 'r': somPedido = SOM_RADAR;   sinal = SINAL_CHIME; Serial.println("Chime radar"); break;
-    case 'e': somPedido = SOM_EXCESSO; sinal = SINAL_CHIME; Serial.println("Chime excesso"); break;
+    case '5': freqHz = 440;  sinal = SINAL_QUADRADA; Serial.println("Quadrada 440 Hz"); break;
+    case 'i': case 'I': tocarChime(SOM_INICIO, "inicio"); break;
+    case 'r': case 'R': tocarChime(SOM_RADAR, "radar"); break;
+    case 'e': case 'E': tocarChime(SOM_EXCESSO, "excesso"); break;
     case '+': volume = volume >= 90 ? 100 : volume + 10; Serial.printf("Volume %u%%\n", volume); break;
     case '-': volume = volume <= 10 ? 0 : volume - 10;   Serial.printf("Volume %u%%\n", volume); break;
-    case 's': sinal = SINAL_SILENCIO; Serial.println("Silencio"); break;
+    case 's': case 'S': sinal = SINAL_SILENCIO; sintParar(); Serial.println("Silencio"); break;
     case '?': mostrarMenu(); break;
-    default: break;  // ignora \r e \n
+    default: Serial.println("(tecla sem funcao - digite ? para o menu)"); break;
+  }
+  if (modo == MODO_PWM && (sinal == SINAL_VARREDURA || sinal == SINAL_CHIME))
+    Serial.println("Obs.: no modo PWM so funcionam os tons 1, 2, 3 e 5.");
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(2000);  // tempo para abrir o Monitor Serial
+  Serial.println("\nTesteAudio iniciando...");
+  configurarModo(MODO_INICIAL);
+  mostrarMenu();
+}
+
+void loop() {
+  while (Serial.available()) tratarTecla((char)Serial.read());
+
+  if (modo == MODO_PWM) {
+    // PWM: so liga/desliga um tom (sem volume)
+    static uint32_t ultimo = UINT32_MAX;
+    uint32_t f = (sinal == SINAL_SENO || sinal == SINAL_QUADRADA) ? (uint32_t)freqHz : 0;
+    if (f != ultimo) {
+      ledcWriteTone(PINO_DIN, f);
+      ultimo = f;
+    }
+    delay(10);
+    return;
+  }
+
+  static int16_t mono[256];
+  static int16_t estereo[512];
+  gerarBloco(mono, 256);
+  for (int i = 0; i < 256; i++) estereo[2 * i] = estereo[2 * i + 1] = mono[i];
+  size_t escritos = i2s ? i2s->write((uint8_t *)estereo, sizeof(estereo)) : 0;
+  if (escritos == 0) {
+    if (!erroEscritaAvisado) {
+      Serial.println("ERRO: o I2S nao esta aceitando dados (veja a mensagem de inicio do modo)");
+      erroEscritaAvisado = true;
+    }
+    delay(10);  // evita travar o loop se o I2S falhou
   }
 }

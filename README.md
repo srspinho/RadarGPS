@@ -101,6 +101,22 @@ GPIO6. Ele toca os mesmos chimes, com volume baixo:
 Nunca ligue um alto-falante direto no pino: ele pede corrente demais e pode queimar o
 GPIO. Depois do teste, volte para `SOM_MODO 2` e use o MAX98357A.
 
+### Buzzer piezo passivo (`SOM_MODO 4`)
+
+É a opção mais simples, sem filtro nem amplificador. Os avisos viram bipes curtos:
+
+| Aviso | Bipes |
+|-------|-------|
+| Ao ligar | 1 bipe curto |
+| Radar à frente | 2 bipes, um grave e um agudo ("bi-bip") |
+| Acima do limite | 3 bipes rápidos e agudos, repetidos a cada 1,5 s |
+| Ao mudar o volume | 1 bipe bem curto |
+
+Ligação: **GPIO7** (`PINO_BUZZER`) → resistor de 100 Ω → piezo → GND. O buzzer
+precisa ser **passivo** (o ativo, que apita sozinho com 3,3 V, só funciona no
+`SOM_MODO 1`). O volume pelo toque também funciona aqui. As frequências e durações
+ficam nas tabelas `BIPES_*` de `som.cpp`.
+
 ### Bancada de testes do áudio (`testes/TesteAudio`)
 
 Programa separado, sem GPS e sem tela, para testar só o som. Abra

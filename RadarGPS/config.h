@@ -73,6 +73,9 @@
 //               Sem filtro tambem toca, mas use SOM_LIMITE_SAIDA baixo (~25)
 //      Fone: I2S_DIN -> 1k -> capacitor 100nF -> ponta do P2; GND -> corpo do P2
 //      (nunca ligue alto-falante direto no pino)
+//  4 = buzzer piezo PASSIVO com bipes curtos (sem filtro nem amplificador)
+//      PINO_BUZZER -> resistor 100 ohms -> piezo -> GND
+//      Volume pelo toque funciona (muda a intensidade do PWM)
 // -----------------------------------------------------------------------------
 #define SOM_MODO 2
 
@@ -85,7 +88,7 @@
 // amplificador distorcer mesmo nos volumes altos; ex.: PAM8403 sem filtro -> 25
 #define SOM_LIMITE_SAIDA 100
 
-#define PINO_BUZZER 7        // so usado com SOM_MODO 1
+#define PINO_BUZZER 7        // usado com SOM_MODO 1 (buzzer ativo) e 4 (piezo passivo)
 
 // Enquanto estiver acima do limite, repete o aviso de excesso a cada X ms
 #define SOM_REPETIR_EXCESSO_MS 1500

@@ -141,6 +141,12 @@ GND ──────────┴──────────┴───�
 Alimente o PAM8403 pelo 5 V, com um eletrolítico de 220–470 µF perto dele, e use o
 mesmo GND do ESP32.
 
+**Sem as peças do filtro:** ligar o pino direto na entrada do PAM8403 também toca,
+mas o amplificador satura com facilidade. Nesse caso, no RadarGPS use
+`SOM_MODO 3`, `I2S_DIN` no pino ligado ao PAM e `SOM_LIMITE_SAIDA` em torno de 25.
+Ajuste o valor ouvindo: o mais alto possível sem o som ficar áspero. Comece com o
+potenciômetro do PAM8403 pela metade.
+
 ## Preparando a Arduino IDE
 
 1. **Arquivo → Preferências → URLs adicionais**:

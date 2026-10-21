@@ -26,7 +26,7 @@ static void tarefaAudio(void *) {
       if (pedido == PEDIDO_PARAR) sintParar();
       else sintTocar((Som)pedido);
     }
-    sintGerar(mono, 256, volumePorcento / 100.0f);
+    sintGerar(mono, 256, volumePorcento / 100.0f * SOM_LIMITE_SAIDA / 100.0f);
     for (int i = 0; i < 256; i++) estereo[2 * i] = estereo[2 * i + 1] = mono[i];
     i2s.write((uint8_t *)estereo, sizeof(estereo));  // bloqueia ate o DMA ter espaco
   }

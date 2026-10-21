@@ -67,10 +67,12 @@
 //  2 = chime sintetizado (sino suave) via modulo I2S MAX98357A + alto-falante
 //      MAX98357A:  BCLK -> I2S_BCLK   LRC -> I2S_LRC   DIN -> I2S_DIN
 //                  VIN -> 5V (VBUS) ou 3V3   GND -> GND   SD/GAIN: deixe soltos
-//  3 = chime para TESTE SEM AMPLIFICADOR: o audio sai so no pino I2S_DIN (GPIO6)
-//      GPIO6 -> resistor 1k -> buzzer PASSIVO (ou piezo) -> GND
-//      Fone: GPIO6 -> 1k -> capacitor 100nF -> ponta do P2; GND -> corpo do P2
-//      (volume baixo; nunca ligue alto-falante direto no pino)
+//  3 = chime em PDM num unico pino (I2S_DIN), para amplificador analogico
+//      (PAM8403 e similares), fone ou buzzer passivo:
+//      PAM8403: I2S_DIN -> filtro RC (ver README) -> IN do PAM; GND comum
+//               Sem filtro tambem toca, mas use SOM_LIMITE_SAIDA baixo (~25)
+//      Fone: I2S_DIN -> 1k -> capacitor 100nF -> ponta do P2; GND -> corpo do P2
+//      (nunca ligue alto-falante direto no pino)
 // -----------------------------------------------------------------------------
 #define SOM_MODO 2
 
@@ -78,6 +80,10 @@
 #define I2S_LRC  5
 #define I2S_DIN  6
 #define SOM_VOLUME 40        // volume inicial (0 a 100); depois o toque na tela ajusta e grava
+
+// Teto do sinal de saida em % (aplicado sobre qualquer volume). Abaixe se o
+// amplificador distorcer mesmo nos volumes altos; ex.: PAM8403 sem filtro -> 25
+#define SOM_LIMITE_SAIDA 100
 
 #define PINO_BUZZER 7        // so usado com SOM_MODO 1
 

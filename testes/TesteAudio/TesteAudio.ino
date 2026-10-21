@@ -82,6 +82,7 @@ static void configurarModo(Modo novo) {
   sintParar();
   erroEscritaAvisado = false;
   Serial.printf("Modo ativo: %s -> %s\n", NOME_MODO[modo], ok ? "OK" : "FALHOU ao iniciar!");
+  if (ok) Serial.println("(em silencio - escolha um sinal: 1, 2, 3, 4, 5 ou i, r, e)");
 }
 
 // Gera um bloco de audio conforme o sinal escolhido
